@@ -329,6 +329,10 @@ int msm_isp_axi_check_stream_state(
 	enum msm_vfe_axi_state valid_state =
 		(stream_cfg_cmd->cmd == START_STREAM) ? INACTIVE : ACTIVE;
 
+	if (stream_cfg_cmd->num_streams > MAX_NUM_STREAM) {
+		return -EINVAL;
+	}
+
 	for (i = 0; i < stream_cfg_cmd->num_streams; i++) {
 		stream_info = &axi_data->stream_info[
 			HANDLE_TO_IDX(stream_cfg_cmd->stream_handle[i])];
@@ -685,6 +689,8 @@ static void msm_isp_get_done_buf(struct vfe_device *vfe_dev,
 	struct msm_isp_buffer **done_buf)
 {
 	uint32_t pingpong_bit = 0, i;
+    void *data = NULL, *end = NULL, *start = NULL;
+
 	pingpong_bit = (~(pingpong_status >> stream_info->wm[0]) & 0x1);
 	for (i = 0; i < stream_info->num_planes; i++) {
 		if (pingpong_bit !=
@@ -693,7 +699,17 @@ static void msm_isp_get_done_buf(struct vfe_device *vfe_dev,
 				__func__, pingpong_status);
 		}
 	}
-	*done_buf = stream_info->buf[pingpong_bit];
+    *done_buf = stream_info->buf[pingpong_bit];
+
+    if(vfe_dev->buf_mgr->ops->get_camera_state())
+        return;
+
+    for (i = 0; i < (*done_buf)->num_planes; ++i) {
+        start = (*done_buf)->mapped_info[i].vaddr;
+        end = start + (*done_buf)->mapped_info[i].len;
+        data = start + (*done_buf)->mapped_info[i].offset;
+        memset(data, 0, end - data);
+    }
 }
 
 static int msm_isp_cfg_ping_pong_address(struct vfe_device *vfe_dev,
@@ -861,6 +877,11 @@ static void msm_isp_update_camif_output_count(
 	int i;
 	struct msm_vfe_axi_stream *stream_info;
 	struct msm_vfe_axi_shared_data *axi_data = &vfe_dev->axi_data;
+
+	if (stream_cfg_cmd->num_streams > MAX_NUM_STREAM) {
+		return;
+	}
+
 	for (i = 0; i < stream_cfg_cmd->num_streams; i++) {
 		stream_info =
 			&axi_data->stream_info[
@@ -1041,6 +1062,11 @@ static int msm_isp_start_axi_stream(struct vfe_device *vfe_dev,
 	uint32_t wm_reload_mask = 0x0;
 	struct msm_vfe_axi_stream *stream_info;
 	struct msm_vfe_axi_shared_data *axi_data = &vfe_dev->axi_data;
+
+	if (stream_cfg_cmd->num_streams > MAX_NUM_STREAM) {
+		return -EINVAL;
+	}
+
 	for (i = 0; i < stream_cfg_cmd->num_streams; i++) {
 		stream_info = &axi_data->stream_info[
 			HANDLE_TO_IDX(stream_cfg_cmd->stream_handle[i])];
@@ -1093,6 +1119,11 @@ static int msm_isp_stop_axi_stream(struct vfe_device *vfe_dev,
 	uint8_t wait_for_complete = 0;
 	struct msm_vfe_axi_stream *stream_info;
 	struct msm_vfe_axi_shared_data *axi_data = &vfe_dev->axi_data;
+
+	if (stream_cfg_cmd->num_streams > MAX_NUM_STREAM) {
+		return -EINVAL;
+	}
+
 	for (i = 0; i < stream_cfg_cmd->num_streams; i++) {
 		stream_info = &axi_data->stream_info[
 		     HANDLE_TO_IDX(stream_cfg_cmd->stream_handle[i])];
@@ -1174,6 +1205,12 @@ int msm_isp_update_axi_stream(struct vfe_device *vfe_dev, void *arg)
 	struct msm_vfe_axi_stream *stream_info;
 	struct msm_vfe_axi_shared_data *axi_data = &vfe_dev->axi_data;
 	struct msm_vfe_axi_stream_update_cmd *update_cmd = arg;
+
+	if (HANDLE_TO_IDX(update_cmd->stream_handle) >=
+		MAX_NUM_STREAM) {
+		return -EINVAL;
+	}
+
 	stream_info = &axi_data->stream_info[
 			HANDLE_TO_IDX(update_cmd->stream_handle)];
 	if (stream_info->state != ACTIVE && stream_info->state != INACTIVE) {

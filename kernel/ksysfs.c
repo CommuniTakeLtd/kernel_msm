@@ -189,6 +189,8 @@ static struct attribute_group kernel_attr_group = {
 	.attrs = kernel_attrs,
 };
 
+extern int communitake_sysfs_init (void);
+
 static int __init ksysfs_init(void)
 {
 	int error;
@@ -208,6 +210,10 @@ static int __init ksysfs_init(void)
 		if (error)
 			goto group_exit;
 	}
+
+	error = communitake_sysfs_init();
+	if (error)
+		goto exit;
 
 	return 0;
 

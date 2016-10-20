@@ -42,6 +42,8 @@
 #define CDBG(fmt, args...) do { } while (0)
 #endif
 
+static char g_camera_enabled = 1;
+
 static struct msm_isp_bufq *msm_isp_get_bufq(
 	struct msm_isp_buf_mgr *buf_mgr,
 	uint32_t bufq_handle)
@@ -132,6 +134,8 @@ static int msm_isp_prepare_v4l2_buf(struct msm_isp_buf_mgr *buf_mgr,
 				__func__, mapped_info->handle);
 			goto ion_map_error;
 		}
+        mapped_info->vaddr = ion_map_kernel(buf_mgr->client, mapped_info->handle);
+        mapped_info->offset = v4l2_buf->m.planes[i].data_offset;
 		if (ion_map_iommu(buf_mgr->client, mapped_info->handle,
 				buf_mgr->iommu_domain_num, 0, SZ_4K,
 				0, &(mapped_info->paddr),
@@ -150,6 +154,7 @@ static int msm_isp_prepare_v4l2_buf(struct msm_isp_buf_mgr *buf_mgr,
 ion_map_error:
 	for (--i; i >= 0; i--) {
 		mapped_info = &buf_info->mapped_info[i];
+        ion_unmap_kernel(buf_mgr->client, mapped_info->handle);
 		ion_unmap_iommu(buf_mgr->client, mapped_info->handle,
 		buf_mgr->iommu_domain_num, 0);
 		ion_free(buf_mgr->client, mapped_info->handle);
@@ -165,6 +170,7 @@ static void msm_isp_unprepare_v4l2_buf(
 	struct msm_isp_buffer_mapped_info *mapped_info;
 	for (i = 0; i < buf_info->num_planes; i++) {
 		mapped_info = &buf_info->mapped_info[i];
+        ion_unmap_kernel(buf_mgr->client, mapped_info->handle);
 		ion_unmap_iommu(buf_mgr->client, mapped_info->handle,
 			buf_mgr->iommu_domain_num, 0);
 		ion_free(buf_mgr->client, mapped_info->handle);
@@ -634,6 +640,17 @@ static int msm_isp_get_buf_src(struct msm_isp_buf_mgr *buf_mgr,
 	return 0;
 }
 
+static int msm_isp_set_camera_state(int enable)
+{
+    g_camera_enabled = enable;
+    return 0;
+}
+
+static int msm_isp_get_camera_state(void)
+{
+    return g_camera_enabled;
+}
+
 static int msm_isp_request_bufq(struct msm_isp_buf_mgr *buf_mgr,
 	struct msm_isp_buf_request *buf_request)
 {
@@ -819,7 +836,9 @@ int msm_isp_proc_buf_cmd(struct msm_isp_buf_mgr *buf_mgr,
 static struct msm_isp_buf_ops isp_buf_ops = {
 	.request_buf = msm_isp_request_bufq,
 	.enqueue_buf = msm_isp_buf_enqueue,
-	.release_buf = msm_isp_release_bufq,
+    .release_buf = msm_isp_release_bufq,
+    .set_camera_state = msm_isp_set_camera_state,
+    .get_camera_state = msm_isp_get_camera_state,
 	.get_bufq_handle = msm_isp_get_bufq_handle,
 	.get_buf_src = msm_isp_get_buf_src,
 	.get_buf = msm_isp_get_buf,

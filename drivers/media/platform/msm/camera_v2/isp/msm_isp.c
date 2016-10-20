@@ -31,7 +31,30 @@
 #include "msm_isp40.h"
 #include "msm_isp32.h"
 
+#define CAM_STATE_PERMISSION 0660
+
+static struct msm_isp_buf_mgr vfe_buf_mgr;
 static struct msm_sd_req_vb2_q vfe_vb2_ops;
+
+static ssize_t store_cam_state(struct kobject *kobj,
+        struct kobj_attribute *attr, const char *enabled, size_t size)
+{
+	int is_enabled = *enabled;
+	vfe_buf_mgr.ops->set_camera_state(is_enabled);
+	return sizeof(char);
+}
+
+static struct kobj_attribute cam_state_attribute =
+__ATTR(cam_state, CAM_STATE_PERMISSION, NULL, store_cam_state);
+
+static struct attribute *attrs[] = {
+	&cam_state_attribute.attr,
+	NULL,
+};
+
+static struct attribute_group attr_group = {
+	.attrs = attrs,
+};
 
 static const struct of_device_id msm_vfe_dt_match[] = {
 	{
@@ -163,6 +186,14 @@ static struct platform_driver vfe_driver = {
 
 static int __init msm_vfe_init_module(void)
 {
+	int rc = 0;
+
+	if (!communitake_kobj || (rc = sysfs_create_group(communitake_kobj, &attr_group))) {
+		pr_warn("%s: failed to create communitake cam_state sysfs node. "
+			"communitake_kobj=%p\n", __func__, communitake_kobj);
+		return rc;
+	}
+
 	return platform_driver_register(&vfe_driver);
 }
 

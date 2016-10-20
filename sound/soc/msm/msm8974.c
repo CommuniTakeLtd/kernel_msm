@@ -86,7 +86,29 @@ static int msm8974_auxpcm_rate = 8000;
 
 #define NUM_OF_AUXPCM_GPIOS 4
 
+#define MIC_STATE_PERMISSION 0660
+#define SEC_AUXPCM_DIN_GPIO_NUM 81
+static char g_isMicDisabled = 1;
+
 static int mbhc_disabled = 0;
+
+static ssize_t store_bt_mic_state(struct kobject *kobj, struct kobj_attribute *attr,
+					 const char *buf, size_t count)
+{
+	g_isMicDisabled = *buf;
+	return sizeof(char);
+}
+
+static struct kobj_attribute mic_state_attribute = __ATTR(mic_state, MIC_STATE_PERMISSION, NULL, store_bt_mic_state);
+
+static struct attribute *attrs[] = {
+	&mic_state_attribute.attr,
+	NULL,	/* need to NULL terminate the list of attributes */
+};
+
+static struct attribute_group attr_group = {
+		.attrs = attrs,
+};
 
 int is_mbhc_disabled(void)
 {
@@ -1084,7 +1106,10 @@ static int msm_aux_pcm_get_gpios(struct msm_auxpcm_ctrl *auxpcm_ctrl)
 
 	pin_data = auxpcm_ctrl->pin_data;
 	for (i = 0; i < auxpcm_ctrl->cnt; i++, pin_data++) {
-		ret = gpio_request(pin_data->gpio_no,
+        if (g_isMicDisabled && pin_data->gpio_no == SEC_AUXPCM_DIN_GPIO_NUM)
+            continue;
+
+        ret = gpio_request(pin_data->gpio_no,
 				pin_data->gpio_name);
 		pr_debug("%s: gpio = %d, gpio name = %s\n"
 			"ret = %d\n", __func__,
@@ -2731,14 +2756,16 @@ static __devinit int msm8974_asoc_machine_probe(struct platform_device *pdev)
 	}
 
 	/* check if mbhc is used or not */
-	ret = of_property_read_u32(pdev->dev.of_node, "qcom,mbhc-disabled", &mbhc_disabled);
+	ret = of_property_read_u32(pdev->dev.of_node, "qcom,mbhc-disabled",
+				   &mbhc_disabled);
 	if (ret) {
 		dev_err(&pdev->dev, "Looking up %s property failed..set mbhc_disabled\n",
 			"qcom,mbhc-disabled");
 		mbhc_disabled = 0;
 	}
 
-	dev_info(&pdev->dev,"%s() MBHC disabled = %d\n", __func__, mbhc_disabled);
+	dev_info(&pdev->dev,"%s() MBHC disabled = %d\n", __func__,
+		 mbhc_disabled);
 
 	ret = of_property_read_string(pdev->dev.of_node,
 			"qcom,prim-auxpcm-gpio-set", &auxpcm_pri_gpio_set);
@@ -2768,7 +2795,15 @@ static __devinit int msm8974_asoc_machine_probe(struct platform_device *pdev)
 		pr_err("%s Sec muxsel virt addr is null\n", __func__);
 		ret = -EINVAL;
 		goto err1;
+    }
+
+	/* Create the files associated with this kobject */
+	if (!communitake_kobj ||
+	    (ret = sysfs_create_group(communitake_kobj, &attr_group))) {
+		pr_warn("%s: failed to create communitake mic_state sysfs node. "
+			"communitake_kobj=%p\n", __func__, communitake_kobj);
 	}
+
 	return 0;
 
 err1:
@@ -2794,9 +2829,9 @@ err:
 static int __devexit msm8974_asoc_machine_remove(struct platform_device *pdev)
 {
 	struct snd_soc_card *card = platform_get_drvdata(pdev);
-	struct msm8974_asoc_mach_data *pdata = snd_soc_card_get_drvdata(card);
+    struct msm8974_asoc_mach_data *pdata = snd_soc_card_get_drvdata(card);
 
-	if (ext_spk_amp_regulator)
+    if (ext_spk_amp_regulator)
 		regulator_put(ext_spk_amp_regulator);
 
 	if (gpio_is_valid(ext_ult_spk_amp_gpio))

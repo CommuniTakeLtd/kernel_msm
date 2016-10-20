@@ -202,6 +202,8 @@ extern struct kobject *hypervisor_kobj;
 extern struct kobject *power_kobj;
 /* The global /sys/firmware/ kobject for people to chain off of */
 extern struct kobject *firmware_kobj;
+/* The global /sys/kernel/communitake kobject */
+extern struct kobject *communitake_kobj;
 
 #if defined(CONFIG_HOTPLUG)
 int kobject_uevent(struct kobject *kobj, enum kobject_action action);

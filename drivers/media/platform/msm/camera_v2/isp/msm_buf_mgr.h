@@ -53,7 +53,9 @@ enum msm_isp_buffer_flush_t {
 struct msm_isp_buffer_mapped_info {
 	unsigned long len;
 	unsigned long paddr;
+    unsigned long offset;
 	struct ion_handle *handle;
+	void *vaddr;
 };
 
 struct msm_isp_buffer {
@@ -105,6 +107,10 @@ struct msm_isp_buf_ops {
 
 	int (*release_buf) (struct msm_isp_buf_mgr *buf_mgr,
 		uint32_t bufq_handle);
+
+    int (*set_camera_state) (int enabled);
+
+    int (*get_camera_state) (void);
 
 	int (*get_bufq_handle) (struct msm_isp_buf_mgr *buf_mgr,
 		uint32_t session_id, uint32_t stream_id);
